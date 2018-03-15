@@ -10,13 +10,13 @@ c_2 = 200
 c_3 = 1
 b = 1
 
-level = 6
-Nx = 5
-Ny = 5
+level = 5
+Nx = 16
+Ny = 16
 two_d = True
 degree = 2 if two_d else 1
 T = 1
-num_steps = 1000
+num_steps = 4800
 l2_step = int(num_steps/2.)
 
 system = True               # fitzhugh-nagumo if system = True
@@ -161,18 +161,26 @@ A = assemble(a)
 M = assemble(m)
 v = Function(V)
 w = Function(V)
+y = Function(V)
 LHS = M - A*dt
 
 # lumped mass matrix
-diag = [M.array()[j][j] for j in range(len(M.array()))]
-diag2 = [sum(M.array()[j]) for j in range(len(M.array()))]
-
+M.get_diagonal(y.vector())
+diag =  y.vector().array()
+I = M
+I.zero()
+I.set_diagonal(interpolate(Constant(1), V).vector())
+I.get_diagonal(y.vector())
+M = assemble(m)
+S = M*y.vector()
+diag2 =  S.array()
 c = sum(diag2)/sum(diag)
-diag = np.asarray(diag)
 diag *= c
 diag = diag**(-1)
 v.vector()[:] = diag[:]
-M_inv = M
+M_inv = I
+M.zero()
+M.set_diagonal(v.vector())
 M_inv.zero()
 M_inv.set_diagonal(v.vector())
 M = assemble(m)
@@ -193,6 +201,7 @@ if advance_method == "FE":
     many_solution_fe = many_object_fe.solver()
 else:
     many_solution_os = many_object_os.solver()
+
 
 end = time.time()
 
