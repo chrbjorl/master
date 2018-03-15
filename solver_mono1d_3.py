@@ -15,7 +15,6 @@ Nx = 5
 Ny = 5
 two_d = True
 degree = 2 if two_d else 1
-print degree
 T = 1
 num_steps = 1000
 l2_step = int(num_steps/2.)
@@ -155,6 +154,8 @@ psi = TestFunction(V)
 v_n_s2 = Function(V)
 a = dot(-sigma*grad(v), grad(psi))*dx
 m = dot(v, psi)*dx
+
+
 # assemble A outside time loop, since A is time-independent
 A = assemble(a)
 M = assemble(m)
@@ -165,6 +166,7 @@ LHS = M - A*dt
 # lumped mass matrix
 diag = [M.array()[j][j] for j in range(len(M.array()))]
 diag2 = [sum(M.array()[j]) for j in range(len(M.array()))]
+
 c = sum(diag2)/sum(diag)
 diag = np.asarray(diag)
 diag *= c
@@ -193,6 +195,7 @@ else:
     many_solution_os = many_object_os.solver()
 
 end = time.time()
+
 print end - start
 
 #interactive()
