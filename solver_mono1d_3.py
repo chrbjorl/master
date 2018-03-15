@@ -15,8 +15,8 @@ c_3 = 1
 b = 1
 
 level = 6
-Nx = 20
-Ny = 20
+Nx = 10
+Ny = 10
 two_d = True
 degree = 2 if two_d else 1
 print degree
