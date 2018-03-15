@@ -1,12 +1,8 @@
 from fenics import *
 import numpy as np
 import time
-import numpy.linalg as LA
-from scipy.linalg import solve_banded
-import scipy.sparse.linalg
 import scipy.sparse
-import dolfin
-import ufl
+
 sigma = 1
 c_1 = 200
 a_1 = 0.1
@@ -15,22 +11,20 @@ c_3 = 1
 b = 1
 
 level = 6
-Nx = 10
-Ny = 10
+Nx = 5
+Ny = 5
 two_d = True
 degree = 2 if two_d else 1
 print degree
 T = 1
-num_steps = 100000
+num_steps = 1000
 l2_step = int(num_steps/2.)
-system = True
+
+system = True               # fitzhugh-nagumo if system = True
 heat = False
 plotting = False
-advance_method = "FE"
+advance_method = "FE"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
 dt = T/float(num_steps)
-
-def scale_m(n):
-    return 80 + 100*(n - 2) + 40*((n + 3)*(n - 2)/2 - 3*(n - 2))
 
 class ODEsolver:
     def __init__(self, T, num_steps, plotting, ref, l2_step, num_elements,
@@ -55,6 +49,7 @@ class ODEsolver:
         filename_referanse = "%sd_%s_%s_%1.9f_%s_%s.dat" % (degree, self.num_elements, \
                                 self.num_steps, self.l2_time, self.heat, self.advance_method)
         outfile = open(filename_referanse, "w")
+        # time stepping
         for n in range(0, self.l2_step + 2):
             if system:
                 v.vector()[:], w.vector()[:] = self.advance()
@@ -66,8 +61,9 @@ class ODEsolver:
             self.exact_expression.t += self.dt
             if n%10 == 0:
                 print self.tid
-            if abs(np.sum(self.v_1_vector.array())/len(self.v_1_vector.array())) > 10000:
-                print "hei"
+            # break if numerical solution diverges
+            if abs(np.sum(self.v_1_vector.array())/len(self.v_1_vector.array())) > 1000:
+                print "break"
                 break
             if n == self.l2_step - 1:
                 u_e = project(self.exact_expression, V)
@@ -126,15 +122,8 @@ class ForwardEuler(ODEsolver):
         if self.heat:
             product1 = dt*A*v_1_vector
             return M_inv*product1 + v_1_vector
-        if not self.system and not self.heat:
-            return scale*20*dt*A*v_1_vector + v_1_vector + dt*c_1*v_1_vector*\
-            (v_1_vector - a_1)*(1 - v_1_vector)
-
-def l2(x):
-    return np.sqrt(np.sum(x**2)/float(len(x)))
 
 # create Expressions
-#I_v_expression = Expression("cos(pi*x[0])", degree = 2)
 if two_d:
     if heat:
         I_v_expression = Expression("cos(pi*x[0])", degree = 2)
@@ -171,14 +160,9 @@ A = assemble(a)
 M = assemble(m)
 v = Function(V)
 w = Function(V)
-
-q = TrialFunction(V)
-z = TestFunction(V)
-form = inner(q,z)*dx
-I = assemble(form)
-I.set_diagonal(interpolate(Constant(1), V).vector())
 LHS = M - A*dt
 
+# lumped mass matrix
 diag = [M.array()[j][j] for j in range(len(M.array()))]
 diag2 = [sum(M.array()[j]) for j in range(len(M.array()))]
 c = sum(diag2)/sum(diag)
