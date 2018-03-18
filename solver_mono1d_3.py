@@ -11,18 +11,18 @@ c_3 = 1
 b = 1
 
 level = 5
-Nx = 16
-Ny = 16
+Nx = 20
+Ny = Nx
 two_d = True
 degree = 2 if two_d else 1
 T = 1
-num_steps = 4800
+num_steps = 140
 l2_step = int(num_steps/2.)
 
 system = True               # fitzhugh-nagumo if system = True
 heat = False
 plotting = False
-advance_method = "FE"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
+advance_method = "OS"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
 dt = T/float(num_steps)
 
 class ODEsolver:
@@ -58,8 +58,8 @@ class ODEsolver:
             self.v_1_vector = v.vector()
             self.tid += self.dt
             self.exact_expression.t += self.dt
-            if n%10 == 0:
-                print self.tid
+            #if n%1 == 0:
+            #      print self.tid
             # break if numerical solution diverges
             if abs(np.sum(self.v_1_vector.array())/len(self.v_1_vector.array())) > 1000:
                 print "break"
@@ -96,7 +96,7 @@ class OperatorSplitting(ODEsolver):
         dt = self.dt
         # step 1
         RHS = M*v_1_vector
-        solve(LHS, v_n_s2.vector(), RHS)
+        solve(LHS, v_n_s2.vector(), RHS, "cg")
         if self.system:
             # step 2
             v_n_s3 = v_n_s2.vector() + dt*(c_1*v_n_s2.vector()*\
@@ -179,8 +179,6 @@ diag *= c
 diag = diag**(-1)
 v.vector()[:] = diag[:]
 M_inv = I
-M.zero()
-M.set_diagonal(v.vector())
 M_inv.zero()
 M_inv.set_diagonal(v.vector())
 M = assemble(m)
@@ -202,9 +200,6 @@ if advance_method == "FE":
 else:
     many_solution_os = many_object_os.solver()
 
-
 end = time.time()
-
 print end - start
-
 #interactive()
