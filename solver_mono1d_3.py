@@ -3,26 +3,26 @@ import numpy as np
 import time
 import scipy.sparse
 
-sigma = 1
+sigma = 0.03
 c_1 = 200
 a_1 = 0.1
 c_2 = 200
 c_3 = 1
 b = 1
 
-level = 5
-Nx = 20
+level = 1
+Nx = 41#4*2**(level - 1)
 Ny = Nx
-two_d = True
-degree = 2 if two_d else 1
-T = 1
-num_steps = 140
-l2_step = int(num_steps/2.)
 
-system = True               # fitzhugh-nagumo if system = True
+degree = 2
+T = 1
+num_steps = 1280#40*2**(level - 1)
+l2_step = int(num_steps/5.)
+
+system = True            # fitzhugh-nagumo if system = True
 heat = False
-plotting = False
-advance_method = "OS"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
+plotting = True
+advance_method = "FE"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
 dt = T/float(num_steps)
 
 class ODEsolver:
@@ -45,8 +45,8 @@ class ODEsolver:
 
     def solver(self):
         ref = self.ref
-        filename_referanse = "%sd_%s_%s_%1.9f_%s_%s.dat" % (degree, self.num_elements, \
-                                self.num_steps, self.l2_time, self.heat, self.advance_method)
+        filename_referanse = "%sd_%s_%s_%s_%s_%1.3f.dat" % (degree, self.num_elements, \
+                                self.num_steps, self.heat, self.advance_method, sigma)
         outfile = open(filename_referanse, "w")
         # time stepping
         for n in range(0, self.l2_step + 2):
@@ -58,21 +58,22 @@ class ODEsolver:
             self.v_1_vector = v.vector()
             self.tid += self.dt
             self.exact_expression.t += self.dt
-            #if n%1 == 0:
-            #      print self.tid
+            if n%20 == 0:
+                  print self.tid
             # break if numerical solution diverges
-            if abs(np.sum(self.v_1_vector.array())/len(self.v_1_vector.array())) > 1000:
+            if abs(np.sum(self.v_1_vector.array())/len(self.v_1_vector.array())) > 2:
                 print "break"
                 break
             if n == self.l2_step - 1:
                 u_e = project(self.exact_expression, V)
                 #write numerical solution to file
-                outfile.write("numerical solution at t=%1.8f" % self.tid)
+                outfile.write("numerical solution at t=%1.8f, sigma = %1.8f" % (self.tid, sigma))
                 outfile.write("\n")
                 s = "%14.8f" % v.vector().array()[0]
                 for j in range(1,len(v.vector().array())):
-                    s += "%14.8f" % v.vector().array()[j]
+                    s += "%14.8f " % v.vector().array()[j]
                 outfile.write(s + "\n")
+                print v.vector().array()
                 if self.heat:
                     # write exact solution to file
                     outfile.write("exact solution at t=%1.8f" % self.tid)
@@ -83,7 +84,7 @@ class ODEsolver:
                     outfile.write(s + "\n")
                     outfile.close()
                 break
-            if self.plotting and n%10 == 0:
+            if self.plotting and n%2 == 0:
                 plot(v)
 
 class OperatorSplitting(ODEsolver):
@@ -125,21 +126,22 @@ class ForwardEuler(ODEsolver):
 # create Expressions
 if two_d:
     if heat:
-        I_v_expression = Expression("cos(pi*x[0])", degree = 2)
+        I_v_expression = Expression("sigma*cos(pi*x[0])", degree = 2, sigma = sigma)
     else:
-        I_v_expression = Expression("x[0] < 0.5 && x[1] < 0.5 ? 1: 0", degree = 2)
-    I_w_expression = Expression("x[0] < 0.5 && x[1] < 0.5 ? 0: 0", degree = 1)
+        I_v_expression = Expression("pow(x[0], 2) + pow(x[1], 2) < 0.2 ? 1: 0", degree = 2)
+    I_w_expression = Expression("x[0] < 0.2 && x[1] < 0.2 ? 0: 0", degree = 1)
     mesh = UnitSquareMesh(Nx, Ny)
 
 else:
     if heat:
-        I_v_expression = Expression("cos(pi*x[0])", degree = 2)
+        I_v_expression = Expression("sigma*cos(pi*x[0])", degree = 2, sigma = sigma)
     else:
-        I_v_expression = Expression("x[0] < 0.5 ? 1: 0", degree = 2)
-    I_w_expression = Expression("x[0] < 0.5 ? 0: 0", degree = 2)
+        I_v_expression = Expression("x[0] < 0.2 ? 1: 0", degree = 2)
+    I_w_expression = Expression("x[0] < 0.2 ? 0: 0", degree = 2)
     mesh = UnitIntervalMesh(Nx)
 
-exact_expression = Expression("exp(-pi*pi*t)*cos(pi*x[0])", degree = 2, t = 0)
+exact_expression = Expression("sigma*exp(-pi*pi*t)*cos(pi*x[0])", degree = 2, t = 0,
+                                sigma = sigma)
 
 #create function space
 V = FunctionSpace(mesh, "P", degree)
@@ -155,7 +157,6 @@ v_n_s2 = Function(V)
 a = dot(-sigma*grad(v), grad(psi))*dx
 m = dot(v, psi)*dx
 
-
 # assemble A outside time loop, since A is time-independent
 A = assemble(a)
 M = assemble(m)
@@ -165,12 +166,15 @@ y = Function(V)
 LHS = M - A*dt
 
 # lumped mass matrix
+# diagonal elements of M
 M.get_diagonal(y.vector())
 diag =  y.vector().array()
+#create identity matrix
 I = M
 I.zero()
 I.set_diagonal(interpolate(Constant(1), V).vector())
 I.get_diagonal(y.vector())
+# diag2 contains the row sums of M
 M = assemble(m)
 S = M*y.vector()
 diag2 =  S.array()
@@ -202,4 +206,4 @@ else:
 
 end = time.time()
 print end - start
-#interactive()
+interactive()
