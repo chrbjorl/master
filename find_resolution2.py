@@ -5,26 +5,30 @@ from math import log
 
 num_experiments = 1
 
-num_steps_ref = 1000
-num_steps = [140]
+sigma = 0.03
 
-num_elements_ref = 400
-num_elements = [20]
+i = 5
 
-method_ref = "OS"
-method = "OS"
+num_steps_ref = 5000000
+num_steps = [1280]
+
+num_elements_ref = 2000
+num_elements = [128]
+
+method_ref = "FE"
+method = "FE"
 
 num_elements.append(num_elements_ref)
 num_steps.append(num_steps_ref)
 
 heat = False
-two_d = True
-degree = 2 if two_d else 1
-degree_ref = 2
+two_d = False
+degree = 1
+degree_ref = 1
 
 error_rates = len(num_elements) > 2.1
 T = 1
-l2_time = 0.5
+
 
 def compute_rates(dt_values, E_values):
     m = len(dt_values)
@@ -50,14 +54,14 @@ l2_times = 0.5
 
 u_elements = []
 for j in range(len(num_steps[0:-1])):
-    filename = "%sd_%s_%s_%1.9f_%s_%s.dat" % (degree, num_elements[j], num_steps[j],
-                                            l2_time, heat, method)
+    filename = "%sd_%s_%s_%s_%s_%1.3f.dat" % (degree, num_elements[j], num_steps[j],
+                                        heat, method, sigma)
     u = read(filename, num_elements[j], degree)
     u_elements.append(u)
     print filename
 
-filename = "%sd_%s_%s_%1.9f_%s_%s.dat" % (degree_ref, num_elements_ref, num_steps_ref,
-                                                l2_time, heat, method_ref)
+filename = "%sd_%s_%s_%s_%s_%1.3f.dat" % (degree_ref, num_elements_ref, num_steps_ref,
+                                    heat, method_ref, sigma)
 print filename
 u_elements.append(read(filename, num_elements_ref, degree_ref))
 if degree_ref == 2:
@@ -68,6 +72,10 @@ if degree_ref == 1:
 V_ref = FunctionSpace(mesh_ref, "P", degree_ref)
 v_ref = Function(V_ref)
 v_ref.vector()[:] = u_elements[-1][:]
+
+def l2_error(a,b, length):
+    return np.sqrt(sum((a-b)**2)/length)
+
 for j in range(0, len(u_elements) - 1, 1):
     if degree == 2:
         mesh = UnitSquareMesh(num_elements[j], num_elements[j])
@@ -78,7 +86,9 @@ for j in range(0, len(u_elements) - 1, 1):
     v.vector()[:] = u_elements[j][:]
     v_ref = interpolate(v_ref, v.ufl_function_space())
     error_L2 = errornorm(v, v_ref, "L2")
-    Error_values.append(error_L2)
+    print error_L2
 
-print Error_values
+
+Error_values = [0.2839116197, 0.2314466729, 0.0193766096, 0.0061085585, 0.0016177889]
+
 print compute_rates(dt_values, Error_values)

@@ -11,13 +11,13 @@ c_3 = 1
 b = 1
 
 level = 1
-Nx = 41#4*2**(level - 1)
+Nx = 30
 Ny = Nx
 
-degree = 2
-T = 1
-num_steps = 1280#40*2**(level - 1)
-l2_step = int(num_steps/5.)
+degree = 1
+two_d = 0
+T = 0.5
+num_steps = 2000
 
 system = True            # fitzhugh-nagumo if system = True
 heat = False
@@ -26,15 +26,13 @@ advance_method = "FE"           #"FE" if ForwardEuler and "OS" if OperatorSplitt
 dt = T/float(num_steps)
 
 class ODEsolver:
-    def __init__(self, T, num_steps, plotting, ref, l2_step, num_elements,
+    def __init__(self, T, num_steps, plotting, ref, num_elements,
                 system, heat, exact_expression, advance_method):
         self.T, self.num_steps = T, num_steps
         self.plotting, self.ref = plotting, ref
         self.v_1_vector = v_0.vector()
         self.w_1_vector = w_0.vector()
         self.dt = T/float(num_steps)
-        self.l2_step = l2_step
-        self.l2_time = l2_step/float(num_steps)*T
         self.num_elements = num_elements
         self.tid = 0
         self.system = system
@@ -49,7 +47,7 @@ class ODEsolver:
                                 self.num_steps, self.heat, self.advance_method, sigma)
         outfile = open(filename_referanse, "w")
         # time stepping
-        for n in range(0, self.l2_step + 2):
+        for n in range(0, self.num_steps ):
             if system:
                 v.vector()[:], w.vector()[:] = self.advance()
                 self.w_1_vector = w.vector()
@@ -64,28 +62,25 @@ class ODEsolver:
             if abs(np.sum(self.v_1_vector.array())/len(self.v_1_vector.array())) > 2:
                 print "break"
                 break
-            if n == self.l2_step - 1:
-                u_e = project(self.exact_expression, V)
-                #write numerical solution to file
-                outfile.write("numerical solution at t=%1.8f, sigma = %1.8f" % (self.tid, sigma))
-                outfile.write("\n")
-                s = "%14.8f" % v.vector().array()[0]
-                for j in range(1,len(v.vector().array())):
-                    s += "%14.8f " % v.vector().array()[j]
-                outfile.write(s + "\n")
-                print v.vector().array()
-                if self.heat:
-                    # write exact solution to file
-                    outfile.write("exact solution at t=%1.8f" % self.tid)
-                    outfile.write("\n")
-                    s = "%14.8f" % u_e.vector().array()[0]
-                    for j in range(1,len(u_e.vector().array())):
-                        s += "%14.8f" % u_e.vector().array()[j]
-                    outfile.write(s + "\n")
-                    outfile.close()
-                break
             if self.plotting and n%2 == 0:
                 plot(v)
+        u_e = project(self.exact_expression, V)
+        #write numerical solution to file
+        outfile.write("numerical solution at t=%1.8f, sigma = %1.8f" % (self.tid, sigma))
+        outfile.write("\n")
+        s = "%14.8f" % v.vector().array()[0]
+        for j in range(1,len(v.vector().array())):
+            s += "%14.8f " % v.vector().array()[j]
+        outfile.write(s + "\n")
+        if self.heat:
+            # write exact solution to file
+            outfile.write("exact solution at t=%1.8f" % self.tid)
+            outfile.write("\n")
+            s = "%14.8f" % u_e.vector().array()[0]
+            for j in range(1,len(u_e.vector().array())):
+                s += "%14.8f" % u_e.vector().array()[j]
+            outfile.write(s + "\n")
+            outfile.close()
 
 class OperatorSplitting(ODEsolver):
     """ Bruker Godunov-splitting og baklengs Euler
@@ -164,7 +159,8 @@ v = Function(V)
 w = Function(V)
 y = Function(V)
 LHS = M - A*dt
-
+#M = PETScMatrix(M)
+#M_invers = inv(M)
 # lumped mass matrix
 # diagonal elements of M
 M.get_diagonal(y.vector())
@@ -190,14 +186,12 @@ M = assemble(m)
 start = time.time()
 
 many_object_fe = ForwardEuler(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
-                            l2_step = l2_step, num_elements = Nx,
-                           system = system, heat = heat, exact_expression = exact_expression,
-                            advance_method = advance_method)
+                            num_elements = Nx, system = system, heat = heat,
+                             exact_expression = exact_expression, advance_method = advance_method)
 
 many_object_os = OperatorSplitting(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
-                                l2_step = l2_step, num_elements = Nx,
-                                system = system, heat = heat, exact_expression = exact_expression,
-                                advance_method = advance_method)
+                                    num_elements = Nx, system = system, heat = heat,
+                                    exact_expression = exact_expression, advance_method = advance_method)
 
 if advance_method == "FE":
     many_solution_fe = many_object_fe.solver()
