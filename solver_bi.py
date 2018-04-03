@@ -3,26 +3,27 @@ import numpy as np
 import time
 import scipy.sparse
 
-sigma = 0.03
+M_i  = 0.8
+M_e  = 0.8
+sigma = 1
 c_1 = 200
 a_1 = 0.1
 c_2 = 200
 c_3 = 1
 b = 1
 
-
-Nx = 500
+Nx = 30
 Ny = Nx
 
 degree = 1
 two_d = 0
 T = 0.5
-num_steps = 80000
+num_steps = 2000
 
 system = True            # fitzhugh-nagumo if system = True
 heat = False
-plotting = False
-advance_method = "FE_system"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
+plotting = True
+advance_method = "FE"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
 dt = T/float(num_steps)
 
 class ODEsolver:
@@ -56,7 +57,7 @@ class ODEsolver:
             self.v_1_vector = v.vector()
             self.tid += self.dt
             self.exact_expression.t += self.dt
-            if n%400 == 0:
+            if n%20 == 0:
                   print self.tid
             # break if numerical solution diverges
             if abs(np.sum(self.v_1_vector.array())/len(self.v_1_vector.array())) > 2:
@@ -105,31 +106,18 @@ class OperatorSplitting(ODEsolver):
 
 class ForwardEuler(ODEsolver):
     def advance(self):
-        if self.system:
-            w_1_vector = self.w_1_vector
-        v_1_vector = self.v_1_vector
-        dt = self.dt
-        if self.system:
-            product1 = dt*A*v_1_vector
-            return M_inv*product1 + v_1_vector + dt*c_1*v_1_vector*\
-            (v_1_vector - a_1)*(1 - v_1_vector) - dt*c_2*v_1_vector*w_1_vector, \
-            dt*b*(v_1_vector - c_3*w_1_vector) + w_1_vector
-        if self.heat:
-            product1 = dt*A*v_1_vector
-            return M_inv*product1 + v_1_vector
-
-class ForwardEulerSystem(ODEsolver):
-    def advance(self):
         w_1_vector = self.w_1_vector
         v_1_vector = self.v_1_vector
+        u_1_vector = self.u_1_vector
         dt = self.dt
-        product1 = dt*A*v_1_vector
-        return M_inv*product1 + v_1_vector + dt*c_1*v_1_vector*\
-                (v_1_vector - a_1)*(1 - v_1_vector) - dt*c_2*v_1_vector*w_1_vector, \
-                dt*b*(v_1_vector - c_3*w_1_vector) + w_1_vector
-
-
-start = time.time()
+        product1 = dt*A1*(v_1_vector + u_1_vector)
+        v_fe = M_inv_diag_vector*product1 + v_1_vector + dt*c_1*v_1_vector*\
+                (v_1_vector - a_1)*(1 - v_1_vector) - dt*c_2*v_1_vector*w_1_vector
+        w_fe = dt*b*(v_1_vector - c_3*w_1_vector) + w_1_vector
+        # use one Jacobi iteration with the solution at the previous time step as
+        # initial guess
+        u_fe = u_1_vector - D1*(A2*u_1_vector + A1*v_fe)
+        return v_fe, w_fe, u_fe
 
 # create Expressions
 if two_d:
@@ -138,6 +126,7 @@ if two_d:
     else:
         I_v_expression = Expression("pow(x[0], 2) + pow(x[1], 2) < 0.2 ? 1: 0", degree = 2)
     I_w_expression = Expression("x[0] < 0.2 && x[1] < 0.2 ? 0: 0", degree = 1)
+    I_u_expression = Expression("pow(x[0], 2) + pow(x[1], 2) < 0.2 ? 1: 0", degree = 2)
     mesh = UnitSquareMesh(Nx, Ny)
 
 else:
@@ -146,10 +135,10 @@ else:
     else:
         I_v_expression = Expression("x[0] < 0.2 ? 1: 0", degree = 2)
     I_w_expression = Expression("x[0] < 0.2 ? 0: 0", degree = 2)
+    I_u_expression = Expression("x[0] < 0.2 ? 1: 0", degree = 2)
     mesh = UnitIntervalMesh(Nx)
 
-exact_expression = Expression("sigma*exp(-pi*pi*t)*cos(pi*x[0])", degree = 2, t = 0,
-                                sigma = sigma)
+exact_expression = Expression("exp(-pi*pi*t)*cos(pi*x[0])", degree = 2, t = 0)
 
 #create function space
 V = FunctionSpace(mesh, "P", degree)
@@ -157,29 +146,32 @@ V = FunctionSpace(mesh, "P", degree)
 #interpolate initial condition
 v_0 = interpolate(I_v_expression, V)
 w_0 = interpolate(I_w_expression, V)
+u_0 = interpolate(I_u_expression, V)
 
 # Define variational problem
 v = TrialFunction(V)
 psi = TestFunction(V)
 v_n_s2 = Function(V)
-a = dot(-sigma*grad(v), grad(psi))*dx
+a1 = dot(-M_i*grad(v), grad(psi))*dx
 m = dot(v, psi)*dx
+a2 = dot((M_i + M_e)*grad(v), grad(psi))*dx
 
 # assemble A outside time loop, since A is time-independent
-A = assemble(a)
+A1 = assemble(a1)
+A2 = assemble(a2)
 M = assemble(m)
 v = Function(V)
 w = Function(V)
 y = Function(V)
-z = Function(V)
-LHS = M - A*dt
+u = Function(V)
+LHS = M - A1*dt
 
 # lumped mass matrix
 # diagonal elements of M
 M.get_diagonal(y.vector())
 diag =  y.vector().array()
 #create identity matrix
-I = M.copy()
+I = M
 I.zero()
 I.set_diagonal(interpolate(Constant(1), V).vector())
 I.get_diagonal(y.vector())
@@ -194,29 +186,41 @@ v.vector()[:] = diag[:]
 M_inv = I
 M_inv.zero()
 M_inv.set_diagonal(v.vector())
-# henter ut diagonalen til lumped mass matrix
+
+# henter ut diagonalen til massematrisen
 M_inv.get_diagonal(z.vector())
 print z.vector().array()
 M_inv_diag_vector = z.vector()
 
-object_fe = ForwardEuler(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
-                            num_elements = Nx, system = system, heat = heat,
-                             exact_expression = exact_expression, advance_method = advance_method)
+#D1 er en diagonalmatrise som brukes i  Jacobi-iterasjoner i det eksplisitte skjemaet
+A2.get_diagonal(y.vector())
+diag3 =  y.vector().array()
+diag3 = diag3**(-1)
+D1 = A2.copy()
+D1.zero()
+v.vector()[:] = diag3[:]
+D1.set_diagonal(v.vector())
+start = time.time()
 
-object_os = OperatorSplitting(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
-                                    num_elements = Nx, system = system, heat = heat,
-                                    exact_expression = exact_expression, advance_method = advance_method)
-object_fe_system = ForwardEulerSystem(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
-                                    num_elements = Nx, system = system, heat = heat,
-                                    exact_expression = exact_expression, advance_method = advance_method)
+# sjekker om Jacobi-iterasjonene i det eksplisitte skjemaet vil konvergere
+D1_mat = as_backend_type(D1).mat()
+A2_mat = as_backend_type(A2).mat()
+C = D1_mat.matMult(A2_mat)
+C = Matrix(PETScMatrix(C))
+print C.array()
 
+many_object_fe = ForwardEuler(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
+                             num_elements = Nx, system = system, heat = heat, exact_expression = exact_expression,
+                             advance_method = advance_method)
+
+many_object_os = OperatorSplitting(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
+                                 num_elements = Nx,system = system, heat = heat, exact_expression = exact_expression,
+                                 advance_method = advance_method)
 
 if advance_method == "FE":
-    solution_fe = object_fe.solver()
-elif advance_method == "OS":
-    solution_os = object_os.solver()
-elif advance_method == "FE_system":
-    solution_os = object_fe_system.solver()
+    many_solution_fe = many_object_fe.solver()
+else:
+    many_solution_os = many_object_os.solver()
 
 end = time.time()
 print end - start
