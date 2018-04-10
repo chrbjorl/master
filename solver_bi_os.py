@@ -3,6 +3,11 @@ import numpy as np
 import time
 import scipy.sparse
 import os
+#os.sys.path.append("./cbc.block/block")
+#from block import *
+#from block.iterative import *
+#from block.algebraic.trilinos import ML
+
 
 M_i  = 3
 M_e  = 3
@@ -22,12 +27,12 @@ two_d = 0
 T = 0.075
 num_steps = 2000
 
-system = True            # fitzhugh-nagumo if system = True
+system_ = True            # fitzhugh-nagumo if system = True
 heat = False
 plotting = False
-advance_method = "FE"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
+advance_method = "OS"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
 dt = T/float(num_steps)
-
+print dt
 def jacobi(u_0, K, v_fe):
     u_old = u_0
     product1 = A1*v_fe
@@ -37,10 +42,11 @@ def jacobi(u_0, K, v_fe):
         u_new = u_old + alfa_jacobi*(product1 - A2*u_old)
         u_old = u_new
     return u_new
+start = time.time()
 
 class ODEsolver:
     def __init__(self, T, num_steps, plotting, ref, num_elements,
-                system, heat, exact_expression, advance_method):
+                system_, heat, exact_expression, advance_method):
         self.T, self.num_steps = T, num_steps
         self.plotting, self.ref = plotting, ref
         self.v_1_vector = v_0.vector()
@@ -49,7 +55,7 @@ class ODEsolver:
         self.dt = T/float(num_steps)
         self.num_elements = num_elements
         self.tid = 0
-        self.system = system
+        self.system_ = system_
         self.heat = heat
         self.exact_expression = exact_expression
         self.advance_method = advance_method
@@ -84,8 +90,7 @@ class ODEsolver:
                 break
             if self.plotting and n%1 == 0:
                 plot(v)
-        u_e = project(self.exact_expression, V)
-        vtk_v << v
+        #vtk_v << v
         #write numerical solution to file
         outfile.write("numerical solution at t=%1.8f, sigma = %1.8f" % (self.tid, sigma))
         outfile.write("\n")
@@ -110,23 +115,29 @@ class OperatorSplitting(ODEsolver):
         w_n_s1 = dt*b*(v_1_vector - c_3*w_1_vector) + w_1_vector
         # step 2
         # define variational problem for implicit scheme
-        product1 = M*v_n_s1
-        return v_n_s1, w_n_s1, x.vector()
+        _v.vector()[:] = v_n_s1
+        (psi1, psi2) = TestFunctions(V)
+        v_var, u_var = split(u_v)
+        F = (v_var - _v)/dt*psi1*dx + inner(M_i*grad(v_var),grad(psi1))*dx + inner(M_i*grad(u_var),grad(psi1))*dx + \
+            inner(M_i*grad(v_var), grad(psi2))*dx + inner((M_i + M_e)*grad(u_var), grad(psi2))*dx
+        #u_var, v_var = TrialFunctions(V)             # her erstattes v- og u-funksjoner som er definert ovenfor
+        #elliptic = inner(M_i*grad(v_var),grad(psi1))*dx + inner(M_i*grad(u_var),grad(psi1))*dx
+        #parabolic = inner(M_i*grad(v_var), grad(psi2))*dx + inner((M_i + M_e)*grad(u_var), grad(psi2))*dx
+        #G = (v_var - _v)*psi1*dx + dt*elliptic + dt*parabolic
+        #a, L = system(G)
+        #pde = LinearVariationalProblem(a, L, u_v)
+        #solver = LinearVariationalSolver(pde)
+        #solver.solve()
+        #print u_v.vector().array()
+        solve(F == 0, u_v)
+        u_v_array = u_v.vector().array()
+        #_v_array = u_v_array[range(self.n%2 == 0,len(u_v_array),2)]
+        #_v.vector()[:] =  _v_array[range(len(_v_array)-1, -1, -1)]
+        #_u_array = u_v_array[range(self.n%2 == 0,len(u_v_array),2)]
+        #_u.vector()[:] =  _u_array[range(len(_u_array)-1, -1, -1)]
+        v_split, u_split = u_v.split(deepcopy=True)
+        return v_split.vector(), w_n_s1, u_split.vector()
 
-class ForwardEuler(ODEsolver):
-    def advance(self):
-        w_1_vector = self.w_1_vector
-        v_1_vector = self.v_1_vector
-        u_1_vector = self.u_1_vector
-        dt = self.dt
-        product1 = dt*A1*(v_1_vector + u_1_vector)
-        v_fe = M_inv*product1 + v_1_vector + dt*c_1*v_1_vector*\
-                (v_1_vector - a_1)*(1 - v_1_vector) - dt*c_2*v_1_vector*w_1_vector
-        w_fe = dt*b*(v_1_vector - c_3*w_1_vector) + w_1_vector
-        # use one Jacobi iteration with the solution at the previous time step as
-        # initial guess
-        u_fe = jacobi(u_1_vector, num_jacobi_iter, v_fe)
-        return v_fe, w_fe, u_fe
 
 vtk_v = File("v_bidomain.pvd")
 
@@ -141,97 +152,34 @@ if two_d:
     mesh = UnitSquareMesh(Nx, Ny)
 
 else:
-    if heat:
-        I_v_expression = Expression("sigma*cos(pi*x[0])", degree = 2, sigma = sigma)
-    else:
-        I_v_expression = Expression("x[0] < 0.2 ? 1: 0", degree = 2)
+    I_v_expression = Expression("x[0] < 0.2 ? 1: 0, 0", degree = 1)
     I_w_expression = Expression("x[0] < 0.2 ? 0: 0", degree = 2)
     I_u_expression = Expression("x[0] < 0.2 ? 1: 0", degree = 2)
     mesh = UnitIntervalMesh(Nx)
-start = time.time()
 
 exact_expression = Expression("exp(-pi*pi*t)*cos(pi*x[0])", degree = 2, t = 0)
 
-V = FunctionSpace(mesh, "P", degree)
 
+#create function space
+mesh_mix = UnitIntervalMesh(Nx)
+V_fe_mix = FiniteElement("CG", mesh.ufl_cell(), degree)
+V = FunctionSpace(mesh_mix, MixedElement(V_fe_mix, V_fe_mix))
+W = FunctionSpace(mesh_mix, V_fe_mix)
+w = Function(W)
+u = Function(W)
+v = Function(W)
+_v = Function(W)
+_u = Function(W)
+u_v = Function(V)
 
 #interpolate initial condition
-v_0 = interpolate(I_v_expression, V)
-w_0 = interpolate(I_w_expression, V)
-u_0 = interpolate(I_u_expression, V)
+v_0 = interpolate(I_v_expression, W)
+w_0 = interpolate(I_w_expression, W)
+u_0 = interpolate(I_u_expression, W)
 
-# Define variational problem used for explicit scheme
-v = TrialFunction(V)
-u_e = TrialFunction(V)
-psi = TestFunction(V)
-
-
-
-a1 = dot(-M_i*grad(v), grad(psi))*dx
-m = dot(v, psi)*dx
-a2 = dot((M_i + M_e)*grad(u_e), grad(psi))*dx
-
-# assemble A outside time loop, since A is time-independent
-A1 = assemble(a1)
-A2 = assemble(a2)
-M = assemble(m)
-v = Function(V)
-w = Function(V)
-y = Function(V)
-u = Function(V)
-zeros = Function(V)
-LHS = M - A1*dt
-
-
-
-
-# lumped mass matrix
-# diagonal elements of M
-M.get_diagonal(y.vector())
-diag =  y.vector().array()
-#create identity matrix
-I = M
-I.zero()
-I.set_diagonal(interpolate(Constant(1), V).vector())
-I.get_diagonal(y.vector())
-# diag2 contains the row sums of M
-M = assemble(m)
-S = M*y.vector()
-diag2 =  S.array()
-c = sum(diag2)/sum(diag)
-diag *= c
-diag = diag**(-1)
-v.vector()[:] = diag[:]
-M_inv = I
-M_inv.zero()
-M_inv.set_diagonal(v.vector())
-
-
-#D1 er en diagonalmatrise som brukes i  Jacobi-iterasjoner i det eksplisitte skjemaet
-A2.get_diagonal(y.vector())
-diag3 =  y.vector().array()
-diag3 = diag3**(-1)
-D1 = A2.copy()
-D1.zero()
-v.vector()[:] = diag3[:]
-D1.set_diagonal(v.vector())
-D1.get_diagonal(y.vector())
-alfa_jacobi =  y.vector().array()
-alfa_jacobi = float(alfa_jacobi[5])
-print "alfa_jacobi: %s" % alfa_jacobi
-
-# R er en matrise som brukes i Jacobi-iterasjonene
-R = A2.copy()
-zeros.vector()[:] = np.zeros(len(zeros.vector().array()))
-R.set_diagonal(zeros.vector())
-
-
-many_object_fe = ForwardEuler(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
-                             num_elements = Nx, system = system, heat = heat, exact_expression = exact_expression,
-                             advance_method = advance_method)
 
 many_object_os = OperatorSplitting(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
-                                 num_elements = Nx,system = system, heat = heat, exact_expression = exact_expression,
+                                 num_elements = Nx,system_ = system_, heat = heat, exact_expression = exact_expression,
                                  advance_method = advance_method)
 
 if advance_method == "FE":
