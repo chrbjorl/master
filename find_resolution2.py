@@ -5,21 +5,23 @@ from math import log
 
 num_experiments = 1
 
-sigma = 0.03
+sigma = 1
 
-i = 5
 
-num_steps_ref = 5000000
-num_steps = [1280]
+model = "bi"
 
-num_elements_ref = 2000
-num_elements = [128]
+num_steps_ref = 2000
+num_steps = [2000]
+
+num_elements_ref = 30
+num_elements = [30]
 
 method_ref = "FE"
-method = "FE"
+method = "OS"
 
 num_elements.append(num_elements_ref)
 num_steps.append(num_steps_ref)
+
 
 heat = False
 two_d = False
@@ -54,14 +56,22 @@ l2_times = 0.5
 
 u_elements = []
 for j in range(len(num_steps[0:-1])):
-    filename = "%sd_%s_%s_%s_%s_%1.3f.dat" % (degree, num_elements[j], num_steps[j],
+    if model == "bi":
+        filename = "bi_%sd_%s_%s_%s_%s_%1.3f.dat" % (degree, num_elements[j], num_steps[j],
+                                        heat, method, sigma)
+    else:
+        filename = "%sd_%s_%s_%s_%s_%1.3f.dat" % (degree, num_elements[j], num_steps[j],
                                         heat, method, sigma)
     u = read(filename, num_elements[j], degree)
     u_elements.append(u)
     print filename
 
-filename = "%sd_%s_%s_%s_%s_%1.3f.dat" % (degree_ref, num_elements_ref, num_steps_ref,
+if model == "bi":
+    filename = "bi_%sd_%s_%s_%s_%s_%1.3f.dat" % (degree_ref, num_elements_ref, num_steps_ref,
                                     heat, method_ref, sigma)
+else:
+    filename = "%sd_%s_%s_%s_%s_%1.3f.dat" % (degree_ref, num_elements_ref, num_steps_ref,
+                                        heat, method_ref, sigma)
 print filename
 u_elements.append(read(filename, num_elements_ref, degree_ref))
 if degree_ref == 2:
