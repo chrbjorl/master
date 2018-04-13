@@ -1,12 +1,11 @@
 from fenics import *
 import numpy as np
 import time
-import scipy.sparse
+import matplotlib.pyplot as plt
 import os
 
 M_i  = 3
 M_e  = 3
-sigma = 1
 c_1 = 200
 a_1 = 0.1
 c_2 = 200
@@ -14,52 +13,44 @@ c_3 = 1
 b = 1
 num_jacobi_iter = 1
 
-Nx = 30
+Nx = 20
 Ny = Nx
 
 degree = 1
-two_d = 0
+two_d = 1
 T = 0.075
-num_steps = 2000
+num_steps = 10000
 
-system = True            # fitzhugh-nagumo if system = True
-heat = False
-plotting = False
+plotting = True
 advance_method = "FE"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
 dt = T/float(num_steps)
+vtk_v = File("v_bidomain.pvd")
 
 def jacobi(u_0, K, v_fe):
     u_old = u_0
     product1 = A1*v_fe
     for k in range(K):
-        #product1 = -1*A1*v_fe
-        #u_new = -0.01041667*(product1 + R*u_old)
-        u_new = u_old + alfa_jacobi*(product1 - A2*u_old)
+        u_new = -1*D_inv*(R*u_old - product1)
+        # u_new = u_old - D_inv*(A2*u_old - product1)
         u_old = u_new
     return u_new
 
 class ODEsolver:
-    def __init__(self, T, num_steps, plotting, ref, num_elements,
-                system, heat, exact_expression, advance_method):
+    def __init__(self, T, num_steps, plotting, num_elements, advance_method):
         self.T, self.num_steps = T, num_steps
-        self.plotting, self.ref = plotting, ref
+        self.plotting = plotting
         self.v_1_vector = v_0.vector()
         self.w_1_vector = w_0.vector()
         self.u_1_vector = u_0.vector()
         self.dt = T/float(num_steps)
         self.num_elements = num_elements
         self.tid = 0
-        self.system = system
-        self.heat = heat
-        self.exact_expression = exact_expression
         self.advance_method = advance_method
 
 
     def solver(self):
-        ref = self.ref
-        filename_referanse = "bi_%sd_%s_%s_%s_%s_%1.3f.dat" % (2**two_d, self.num_elements, \
-                                self.num_steps, self.heat, self.advance_method, sigma)
-        outfile = open(filename_referanse, "w")
+        filename = "bi_%sd_%s_%s_%s" % (2**two_d, self.num_elements, \
+                                self.num_steps, self.advance_method)
         # time stepping
         for n in range(0, self.num_steps ):
             self.n = n
@@ -69,49 +60,27 @@ class ODEsolver:
                 # loser for u_e i forste tidssteg med conjugate gradient metoden
                 solve(A2, u.vector(), -1*A1*self.v_1_vector, "cg")
                 self.u_1_vector = u.vector()
-                print self.u_1_vector.array()
+                print self.u_1_vector.get_local()
             v.vector()[:], w.vector()[:], u.vector()[:] = self.advance()
             self.w_1_vector = w.vector()
             self.v_1_vector = v.vector()
             self.u_1_vector = u.vector()
             self.tid += self.dt
-            self.exact_expression.t += self.dt
-            if n%20 == 0:
+            if n%200 == 0:
                   print self.tid
             # break if numerical solution diverges
-            if abs(np.sum(self.v_1_vector.array())/len(self.v_1_vector.array())) > 10:
+            if abs(np.sum(self.v_1_vector.get_local())/len(self.v_1_vector.get_local())) > 10:
                 print "break"
                 break
-            if self.plotting and n%1 == 0:
+            if self.plotting and n%int(num_steps/4) == 0:
                 plot(v)
-        u_e = project(self.exact_expression, V)
+                plt.show()
         vtk_v << v
         #write numerical solution to file
-        outfile.write("numerical solution at t=%1.8f, sigma = %1.8f" % (self.tid, sigma))
-        outfile.write("\n")
-        s = "%14.8f" % v.vector().array()[0]
-        for j in range(1,len(v.vector().array())):
-            s += "%14.8f " % v.vector().array()[j]
-        outfile.write(s + "\n")
-        outfile.close()
+        output_file = XDMFFile(filename + ".xdmf")
+        output_file.write_checkpoint(v,'v')
+        File(filename + '_mesh.xml.gz') << v.function_space().mesh()
 
-
-class OperatorSplitting(ODEsolver):
-    """ Bruker Godunov-splitting og baklengs Euler
-    """
-    def advance(self):
-        v_1_vector = self.v_1_vector
-        w_1_vector = self.w_1_vector
-        dt = self.dt
-        # step 1
-        v_n_s1 = v_1_vector + dt*(c_1*v_1_vector*\
-                (v_1_vector - a_1)*(1 - v_1_vector) - c_2*v_1_vector*w_1_vector)
-
-        w_n_s1 = dt*b*(v_1_vector - c_3*w_1_vector) + w_1_vector
-        # step 2
-        # define variational problem for implicit scheme
-        product1 = M*v_n_s1
-        return v_n_s1, w_n_s1, x.vector()
 
 class ForwardEuler(ODEsolver):
     def advance(self):
@@ -128,32 +97,21 @@ class ForwardEuler(ODEsolver):
         u_fe = jacobi(u_1_vector, num_jacobi_iter, v_fe)
         return v_fe, w_fe, u_fe
 
-vtk_v = File("v_bidomain.pvd")
 
-# create Expressions
+# create Expressionsf
 if two_d:
-    if heat:
-        I_v_expression = Expression("sigma*cos(pi*x[0])", degree = 2, sigma = sigma)
-    else:
-        I_v_expression = Expression("pow(x[0], 2) + pow(x[1], 2) < 0.2 ? 1: 0", degree = 2)
+    I_v_expression = Expression("pow(x[0], 2) + pow(x[1], 2) < 0.2 ? 1: 0", degree = 2)
     I_w_expression = Expression("x[0] < 0.2 && x[1] < 0.2 ? 0: 0", degree = 1)
     I_u_expression = Expression("pow(x[0], 2) + pow(x[1], 2) < 0.2 ? 1: 0", degree = 2)
     mesh = UnitSquareMesh(Nx, Ny)
 
 else:
-    if heat:
-        I_v_expression = Expression("sigma*cos(pi*x[0])", degree = 2, sigma = sigma)
-    else:
-        I_v_expression = Expression("x[0] < 0.2 ? 1: 0", degree = 2)
+    I_v_expression = Expression("x[0] < 0.2 ? 1: 0", degree = 2)
     I_w_expression = Expression("x[0] < 0.2 ? 0: 0", degree = 2)
     I_u_expression = Expression("x[0] < 0.2 ? 1: 0", degree = 2)
     mesh = UnitIntervalMesh(Nx)
 start = time.time()
-
-exact_expression = Expression("exp(-pi*pi*t)*cos(pi*x[0])", degree = 2, t = 0)
-
 V = FunctionSpace(mesh, "P", degree)
-
 
 #interpolate initial condition
 v_0 = interpolate(I_v_expression, V)
@@ -164,8 +122,6 @@ u_0 = interpolate(I_u_expression, V)
 v = TrialFunction(V)
 u_e = TrialFunction(V)
 psi = TestFunction(V)
-
-
 
 a1 = dot(-M_i*grad(v), grad(psi))*dx
 m = dot(v, psi)*dx
@@ -181,9 +137,6 @@ y = Function(V)
 u = Function(V)
 zeros = Function(V)
 LHS = M - A1*dt
-
-
-
 
 # lumped mass matrix
 # diagonal elements of M
@@ -206,55 +159,25 @@ M_inv = I
 M_inv.zero()
 M_inv.set_diagonal(v.vector())
 
-
-#D1 er en diagonalmatrise som brukes i  Jacobi-iterasjoner i det eksplisitte skjemaet
+#D_inv er en diagonalmatrise som brukes i  Jacobi-iterasjoner i det eksplisitte skjemaet
 A2.get_diagonal(y.vector())
 diag3 =  y.vector().array()
 diag3 = diag3**(-1)
-D1 = A2.copy()
-D1.zero()
+D_inv = A2.copy()
+D_inv.zero()
 v.vector()[:] = diag3[:]
-D1.set_diagonal(v.vector())
-D1.get_diagonal(y.vector())
-alfa_jacobi =  y.vector().array()
-alfa_jacobi = float(alfa_jacobi[5])
-print "alfa_jacobi: %s" % alfa_jacobi
+D_inv.set_diagonal(v.vector())
+D_inv.get_diagonal(y.vector())
 
 # R er en matrise som brukes i Jacobi-iterasjonene
 R = A2.copy()
 zeros.vector()[:] = np.zeros(len(zeros.vector().array()))
 R.set_diagonal(zeros.vector())
+object_fe = ForwardEuler(T = T, num_steps = num_steps, plotting = plotting,
+                             num_elements = Nx, advance_method = advance_method)
 
-
-many_object_fe = ForwardEuler(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
-                             num_elements = Nx, system = system, heat = heat, exact_expression = exact_expression,
-                             advance_method = advance_method)
-
-many_object_os = OperatorSplitting(T = T, num_steps = num_steps, plotting = plotting, ref = True,\
-                                 num_elements = Nx,system = system, heat = heat, exact_expression = exact_expression,
-                                 advance_method = advance_method)
-
-if advance_method == "FE":
-    many_solution_fe = many_object_fe.solver()
-else:
-    many_solution_os = many_object_os.solver()
+solution_fe = object_fe.solver()
 
 end = time.time()
 print end - start
-interactive()
-
-
-"""
-
-# define variational problem for implicit scheme
-parabolic = inner(M_i*grad(v), grad(psi1))*dx + inner(M_i*grad(u_e_os), grad(psi1))*dz
-elliptic = inner(M_i*grad(v), grad(psi2))*dz + inner((M_i + M_e)*grad(u_e_os), grad(psi2))*dz
-G = parabolic + elliptic
-
-block_mat = BlockMatrix(2, 2)
-block_mat[0,0] = M - dt*A1
-block_mat[0,1] = -dt*A1
-block_mat[1,0] = A1
-block_mat[1,1] = A2
-block_vector = BlockVector(2)
-"""
+#interactive()

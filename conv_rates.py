@@ -5,18 +5,18 @@ from math import log
 
 num_experiments = 1
 
-sigma = 0.03
+sigma = 1
 T = 1
 
-model = ""
+model = "bi"
 
-num_steps_ref = 10000
-num_steps = [2000 for i in range(3)]
+num_steps_ref = 200
+num_steps = [50, 100]
 
-num_elements_ref = 200
-num_elements =[30 + i for i in range(3)]
-method_ref = "FE"
-method = "FE"
+num_elements_ref = 40
+num_elements =[10, 20]
+method_ref = "OS"
+method = "OS"
 
 num_elements.append(num_elements_ref)
 num_steps.append(num_steps_ref)
@@ -24,8 +24,8 @@ num_steps.append(num_steps_ref)
 
 heat = False
 two_d = 1
-degree = 2
-degree_ref = 2
+degree = 1
+degree_ref = 1
 
 dt_values = [T/float(timestep) for timestep in num_steps[0:-1]]
 Error_values = []
@@ -40,8 +40,8 @@ def compute_rates(dt_values, E_values):
 vectors = []
 for j in range(len(num_steps)):
     if model == "bi":
-        filename = "bi_%sd_%s_%s_%s_%s_%1.3f" % (2**two_d, num_elements[j], num_steps[j],
-                                        heat, method, sigma)
+        filename = "bi_%sd_%s_%s_%s" % (2**two_d, num_elements[j], num_steps[j],
+                                        method)
     else:
         filename = "%sd_%s_%s_%s_%s_%1.3f" % (2**two_d, num_elements[j], num_steps[j],
                                         heat, method, sigma)
