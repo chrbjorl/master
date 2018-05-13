@@ -3,30 +3,9 @@ import numpy as np
 import time
 import matplotlib.pyplot as plt
 
-sigma = 0.03
-#c_1 = 200
-#a_1 = 0.1
-#c_2 = 200
-#c_3 = 1
-#b = 1
-
-Nx = 40
-Ny = Nx
-
-degree = 1
-two_d = 0
-T = 0.2
-num_steps = 1000
-
-system = False         # fitzhugh-nagumo if system = True
-heat = False
-plotting = True
-advance_method = "FE"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
-dt = T/float(num_steps)
-
-class ODEsolver:
+class PDEsolver:
     def __init__(self, T, num_steps, plotting, num_elements,
-                system, heat, advance_method, two_d, sigma,
+                system, heat, advance_method, two_d, sigma, degree,
                 c_1 = 200, a_1 = 0.1, c_2 = 200, c_3 = 1, b = 1):
         self.T, self.num_steps = T, num_steps
         self.plotting = plotting
@@ -38,28 +17,20 @@ class ODEsolver:
         self.advance_method = advance_method
         self.two_d = two_d
         self.c_1, self.a_1, self.c_2, self.c_3, self.b = c_1, a_1, c_2, c_3, b
+        self.start = time.time()
         Nx = num_elements
         Ny = Nx
 
         # create Expressions
         if two_d:
-            if heat:
-                I_v_expression = Expression("sigma*cos(pi*x[0])", degree = 2, sigma = sigma)
-            else:
-                I_v_expression = Expression("pow(x[0], 2) + pow(x[1], 2) < 0.2 ? 1: 0", degree = 2)
-            I_w_expression = Expression("x[0] < 0.2 && x[1] < 0.2 ? 0: 0", degree = 1)
+            I_v_expression = Expression("pow(x[0], 2) + pow(x[1], 2) < 0.2 ? 1: 0", degree = degree)
+            I_w_expression = Expression("x[0] < 0.2 && x[1] < 0.2 ? 0: 0", degree = degree)
             mesh = UnitSquareMesh(Nx, Ny)
 
         else:
-            if heat:
-                I_v_expression = Expression("sigma*cos(pi*x[0])", degree = 2, sigma = sigma)
-            else:
-                I_v_expression = Expression("x[0] < 0.2 ? 1: 0", degree = 2)
-            I_w_expression = Expression("x[0] < 0.2 ? 0: 0", degree = 2)
+            I_v_expression = Expression("x[0] < 0.2 ? 1: 0", degree)
+            I_w_expression = Expression("x[0] < 0.2 ? 0: 0", degree)
             mesh = UnitIntervalMesh(Nx)
-
-        exact_expression = Expression("sigma*exp(-pi*pi*t)*cos(pi*x[0])", degree = 2, t = 0,
-                                        sigma = sigma)
 
         #create function space
         V = FunctionSpace(mesh, "P", degree)
@@ -82,7 +53,7 @@ class ODEsolver:
         w = Function(V)
         y = Function(V)
         z = Function(V)
-        LHS = M - A*dt
+        LHS = M - A*self.dt
 
         # lumped mass matrix
         # diagonal elements of M
@@ -109,15 +80,11 @@ class ODEsolver:
         M_inv_diag_vector = z.vector()
         self.v_1_vector = v_0.vector()
         self.w_1_vector = w_0.vector()
-        self.M_inv = M_inv
-        self.M = M
-        self.A = A
+        self.M_inv, self.M, self.A = M_inv, M, A
         self.LHS = LHS
         self.sigma = sigma
         self.v, self.w, self.V = v, w, V
-        self.exact_expression = exact_expression
-
-
+        self.v_n_s2 = Function(V)
 
     def solver(self):
         v, w = self.v, self.w
@@ -133,38 +100,35 @@ class ODEsolver:
                 v.vector()[:] = self.advance()
             self.v_1_vector = v.vector()
             self.tid += self.dt
-            self.exact_expression.t += self.dt
             if n%100 == 0:
                   print self.tid
             # break if numerical solution diverges
             if abs(np.sum(self.v_1_vector.get_local())/len(self.v_1_vector.get_local())) > 2:
                 print "break"
                 break
-            if self.plotting and n%int(self.num_steps/2) == 0:
+            if self.plotting and n%int(self.num_steps/3) == 0:
                 plot(v)
                 plt.show()
-        u_e = project(self.exact_expression, self.V)
+        self.end = time.time()
+        print self.end - self.start
+        plot(v)
+        plt.show()
         #write numerical solution to file
+        vtk_filename = "monodomain_%s_%s.pvd" % (self.two_d, self.advance_method)
+        vtk_file = File(vtk_filename)
+        vtk_file << v
         output_file = XDMFFile(filename + ".xdmf")
         output_file.write_checkpoint(v,'v')
         File(filename + '_mesh.xml.gz') << v.function_space().mesh()
-        if self.heat:
-            # write exact solution to file
-            outfile.write("exact solution at t=%1.8f" % self.tid)
-            outfile.write("\n")
-            s = "%14.8f" % u_e.vector().get_local()[0]
-            for j in range(1,len(u_e.vector().get_local())):
-                s += "%14.8f" % u_e.vector().get_local()[j]
-            outfile.write(s + "\n")
-            outfile.close()
 
-class OperatorSplitting(ODEsolver):
+class OperatorSplitting(PDEsolver):
     """ Bruker Godunov-splitting og baklengs Euler
     """
 
     def advance(self):
         v_1_vector = self.v_1_vector
         w_1_vector = self.w_1_vector
+        v_n_s2 = self.v_n_s2
         dt = self.dt
         LHS = self.LHS
         M = self.M
@@ -182,7 +146,7 @@ class OperatorSplitting(ODEsolver):
         else:
             return v_n_s2.vector()
 
-class ForwardEuler(ODEsolver):
+class ForwardEuler(PDEsolver):
     def advance(self):
         if self.system:
             w_1_vector = self.w_1_vector
@@ -206,8 +170,7 @@ class ForwardEuler(ODEsolver):
             return M_inv*product1 + v_1_vector + dt*c_1*v_1_vector*\
                     (v_1_vector - a_1)*(1 - v_1_vector)
 
-
-class ForwardEulerSystem(ODEsolver):
+class ForwardEulerSystem(PDEsolver):
     def advance(self):
         w_1_vector = self.w_1_vector
         v_1_vector = self.v_1_vector
@@ -217,28 +180,51 @@ class ForwardEulerSystem(ODEsolver):
                 (v_1_vector - a_1)*(1 - v_1_vector) - dt*c_2*v_1_vector*w_1_vector, \
                 dt*b*(v_1_vector - c_3*w_1_vector) + w_1_vector
 
-
 if __name__ == "__main__":
+
+    sigma = 0.1
+    #c_1 = 200
+    #a_1 = 0.1
+    #c_2 = 200
+    #c_3 = 1
+    #b = 1
+    i = 4
+    Nx = 100#800*2**i
+    Ny = Nx
+
+    degree = 1
+    two_d = 1
+    T = 0.1
+    num_steps = 400#12*4**i
+
+    system = True         # fitzhugh-nagumo if system = True
+    heat = False
+    plotting = False
+    advance_method = "OS"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
+    dt = T/float(num_steps)
+
     start = time.time()
+
     object_fe = ForwardEuler(T = T, num_steps = num_steps, plotting = plotting, \
                             num_elements = Nx, system = system, heat = heat,
                               advance_method = advance_method, two_d = two_d,
-                              sigma = sigma)
+                              sigma = sigma, degree = degree)
 
     object_os = OperatorSplitting(T = T, num_steps = num_steps, plotting = plotting,
                                     num_elements = Nx, system = system, heat = heat,
                                      advance_method = advance_method, two_d = two_d,
-                                     sigma = sigma)
+                                     sigma = sigma, degree = degree)
     object_fe_system = ForwardEulerSystem(T = T, num_steps = num_steps, plotting = plotting,
                                     num_elements = Nx, system = system, heat = heat,
                                     advance_method = advance_method, two_d = two_d,
-                                    sigma = sigma)
+                                    sigma = sigma, degree = degree)
     if advance_method == "FE":
-        solution_fe = object_fe.solver()
+        object_fe.solver()
+        print "hei"
     elif advance_method == "OS":
-        solution_os = object_os.solver()
+        object_os.solver()
     elif advance_method == "FE_system":
-        solution_os = object_fe_system.solver()
+        object_fe_system.solver()
 
     end = time.time()
     print end - start
