@@ -4,6 +4,7 @@ import time
 import solver_monodomene as solver_mono
 import solver_bidomene as solver_bi
 from math import log
+num_jacobi_iter
 
 def compute_rates(dt_values, E_values):
     m = len(dt_values)
@@ -11,9 +12,8 @@ def compute_rates(dt_values, E_values):
             for i in range(1, m, 1)]
     return r
 
-def table(num_steps, num_elements, advance_method, two_d, mono, T = 0.1, plotting = False,
-        sigma = 0.1, M_i  = 0.1, M_e = 0.1):
-    degree = 1
+def table(num_steps, num_elements, advance_method, two_d, mono, plotting = False,
+    jacobi_ = True, num_jacobi_iter = [], T = 0.1, sigma = 0.1, M_i  = 0.1, M_e = 0.1):
     degree_ref = 1
     dt_values = [T/float(timestep) for timestep in num_steps]
     if mono:
@@ -23,9 +23,9 @@ def table(num_steps, num_elements, advance_method, two_d, mono, T = 0.1, plottin
             filename_ref = "1d_10000_2100000_False_True_FE_0.100"
     else:
         if two_d:
-            filename_ref = "2d_600_16000_False_True_FE_0.100"
+            filename_ref = "bi_2d_500_500_OS"
         else:
-            filename_ref = "1d_10000_2100000_False_True_FE_0.100"
+            filename_ref = "bi_1d_10000_40000_OS"
     Error_values = []
     vectors_v = []
     for j in range(len(num_steps)):
@@ -33,15 +33,22 @@ def table(num_steps, num_elements, advance_method, two_d, mono, T = 0.1, plottin
             if advance_method == "OS":
                 object_ = solver_mono.OperatorSplitting(T = T, num_steps = num_steps[j], plotting = plotting,
                                     num_elements = num_elements[j], system = True, heat = False,
-                                     advance_method = advance_method, two_d = two_d,
-                                     sigma = sigma, degree = degree)
+                                     advance_method = advance_method, two_d = two_d)
             else:
-                object_ = solver_mono.ForwardEuler(T = T, num_steps = num_steps[j], plotting = plotting,
+                object_ = solver_mono.ForwardEuler(T = T, num_steps = num_steps[j], plotting_v = plotting,
                                     num_elements = num_elements[j], system = True, heat = False,
-                                     advance_method = advance_method, two_d = two_d,
-                                     sigma = sigma, degree = degree)
+                                     advance_method = advance_method, two_d = two_d)
         else:
-            "hei"
+            if advance_method == "FE":
+                object_ = solver_bi.ForwardEuler(T = T, num_steps = num_steps[j ],
+                         plotting_v = plotting, num_elements = num_elements[j],
+                          advance_method = advance_method, two_d = two_d,
+                          num_jacobi_iter = num_jacobi_iter[j], jacobi_ = jacobi_)
+            else:
+                object_ = solver_bi.OperatorSplitting(T = T, num_steps = num_steps[j],
+                             plotting_v = plotting, num_elements = num_elements[j],
+                              advance_method = advance_method, two_d = two_d,
+                              num_jacobi_iter = num_jacobi_iter[j], jacobi_ = jacobi_)
         object_.solver()
         vectors_v.append(object_.v)
     input_file = XDMFFile(filename_ref +'.xdmf')
@@ -56,13 +63,13 @@ def table(num_steps, num_elements, advance_method, two_d, mono, T = 0.1, plottin
         error_L2 = errornorm(v_ref_interpolate, v, "L2")
         Error_values.append(error_L2)
     conv_rates = compute_rates(dt_values, Error_values)
-    print '    dx            dt          L2 error  conv. rate'
+    print '    dx       dt     L2 error  conv. rate'
     print "%6.6f% 6.6f% 10.4f" % (1/float(num_elements[0]), dt_values[0],
                                 Error_values[0])
     for j in range(len(conv_rates)):
         print "%6.6f% 6.6f% 10.4f%12.4f" % (1/float(num_elements[j+1]), dt_values[j+1],
                                 Error_values[j+1],conv_rates[j])
 
-if __name__ = "main":
+if __name__ == "main":
     table(num_steps = [500], num_elements = [25], advance_method = "FE", two_d = False,
     mono = True, plotting = True)
