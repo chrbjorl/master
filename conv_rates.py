@@ -4,7 +4,7 @@ import time
 import solver_monodomene as solver_mono
 import solver_bidomene as solver_bi
 from math import log
-num_jacobi_iter
+set_log_active(False)
 
 def compute_rates(dt_values, E_values):
     m = len(dt_values)
@@ -12,8 +12,8 @@ def compute_rates(dt_values, E_values):
             for i in range(1, m, 1)]
     return r
 
-def table(num_steps, num_elements, advance_method, two_d, mono, plotting = False,
-    jacobi_ = True, num_jacobi_iter = [], T = 0.1, sigma = 0.1, M_i  = 0.1, M_e = 0.1):
+def table(num_steps, num_elements, advance_method, two_d, mono, plotting = False,T = 0.1,
+    jacobi_ = True, num_jacobi_iter = [], sigma = 0.1, M_i  = 0.1, M_e = 0.1):
     degree_ref = 1
     dt_values = [T/float(timestep) for timestep in num_steps]
     if mono:
@@ -47,12 +47,14 @@ def table(num_steps, num_elements, advance_method, two_d, mono, plotting = False
             else:
                 object_ = solver_bi.OperatorSplitting(T = T, num_steps = num_steps[j],
                              plotting_v = plotting, num_elements = num_elements[j],
-                              advance_method = advance_method, two_d = two_d,
-                              num_jacobi_iter = num_jacobi_iter[j], jacobi_ = jacobi_)
+                              advance_method = advance_method, two_d = two_d)
         object_.solver()
         vectors_v.append(object_.v)
     input_file = XDMFFile(filename_ref +'.xdmf')
-    mesh_v = Mesh(filename_ref +'_mesh.xml.gz')
+    if mono:
+        mesh_v = Mesh(filename_ref +'_mesh.xml.gz')
+    else:
+        mesh_v = Mesh(filename_ref +'_mesh_v.xml.gz')
     V_ref_v = FunctionSpace(mesh_v, 'P', degree_ref)
     v_ref = Function(V_ref_v)
     input_file.read_checkpoint(v_ref, "v")

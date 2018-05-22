@@ -4,11 +4,10 @@ import time
 import matplotlib.pyplot as plt
 import os
 
-
 class PDEsolver:
     def __init__(self, T, num_steps, plotting_v, num_elements,
-                advance_method, two_d, degree, num_jacobi_iter, jacobi_, M_i = 0.1, M_e = 0.1,
-                c_1 = 200, a_1 = 0.1, c_2 = 200, c_3 = 1, b = 1):
+                advance_method, two_d, num_jacobi_iter = [], jacobi_ = [], degree = 1,
+                 M_i = 0.1, M_e = 0.1, c_1 = 200, a_1 = 0.1, c_2 = 200, c_3 = 1, b = 1):
         self.T, self.num_steps = T, num_steps
         self.plotting_v = plotting_v
         self.dt = T/float(num_steps)
@@ -139,26 +138,26 @@ class PDEsolver:
                 # loser for u_e i forste tidssteg med conjugate gradient metoden
                 solve(self.A2, u.vector(), -1*self.A1*self.v_1_vector, "cg")
                 self.u_1_vector = u.vector()
-                print self.u_1_vector.get_local()
             v.vector()[:], w.vector()[:], u.vector()[:] = self.advance()
             self.w_1_vector = w.vector()
             self.v_1_vector = v.vector()
             self.u_1_vector = u.vector()
             self.tid += self.dt
-            if n%10 == 0:
-                  print self.tid
+            if n%int(self.num_steps/5) == 0:
+                  print "t = %1.2f" % self.tid
             # break if numerical solution diverges
             if abs(np.sum(self.v_1_vector.get_local())/len(self.v_1_vector.get_local())) > 10:
                 print "break"
                 break
-            if self.plotting_v and n%int(num_steps/3) == 0:
+            if self.plotting_v and n%int(self.num_steps/3) == 0:
                 plot(v)
                 plt.show()
-        end = time.time()
-        print end - self.start
+        self.end = time.time()
+        print "CPU-time: %1.2f" % float(self.end - self.start)
         output_file = XDMFFile(filename + ".xdmf")
         output_file.write_checkpoint(v,'v')
         File(filename + '_mesh_v.xml.gz') << v.function_space().mesh()
+        self.v = v
 
 class ForwardEuler(PDEsolver):
     def advance(self):
@@ -226,10 +225,10 @@ if __name__ == "__main__":
     num_jacobi_iter = 1
 
     i = 0
-    Nx = 50*2**i     #20*2**i
+    Nx = 50*2**i
     Ny = Nx
 
-    degree = 1   # ikke endre denne!
+    degree = 1
     two_d = 1
     T = 0.1
     num_steps = 15*2**i
