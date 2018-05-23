@@ -7,6 +7,7 @@ class PDEsolver:
     def __init__(self, T, num_steps, plotting, num_elements,
                 system, heat, advance_method, two_d, write = False, sigma = 0.1,
                 degree = 1, c_1 = 200, a_1 = 0.1, c_2 = 200, c_3 = 1, b = 1):
+        set_log_active(False)
         self.T, self.num_steps = T, num_steps
         self.plotting = plotting
         self.dt = T/float(num_steps)

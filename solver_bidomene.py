@@ -3,14 +3,13 @@ import numpy as np
 import time
 import matplotlib.pyplot as plt
 import os
-set_log_active(False)
 
 class PDEsolver:
     def __init__(self, T, num_steps, plotting_v, num_elements,
                 advance_method, two_d, num_jacobi_iter = [], jacobi_ = [],
                 write = False, degree = 1, M_i = 0.1, M_e = 0.1, c_1 = 200,
                  a_1 = 0.1, c_2 = 200, c_3 = 1, b = 1):
-
+        set_log_active(False)
         self.T, self.num_steps = T, num_steps
         self.plotting_v = plotting_v
         self.dt = T/float(num_steps)
@@ -216,5 +215,3 @@ class OperatorSplitting(PDEsolver):
         solve(F == 0, u_v)
         v_split, u_split = u_v.split(deepcopy=True)
         return v_split.vector(), w_n_s1, u_split.vector()
-
-if __name__ == "__main__":
