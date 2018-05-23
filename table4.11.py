@@ -30,11 +30,9 @@ for j in range(len(num_jacobi_iter)):
     errors_fe.append(error_(two_d = two_d, object_ = object_fe, mono = mono))
     time_fe.append(object_fe.end - object_fe.start)
 
-print errors_fe
-print time_fe
 
 
-print "Method for solving elliptic part             CPU-time        dx        dt      error"
+print "Method for solving elliptic part           CPU-time     dx        dt   error"
 print "conjugate gradient method until convergence   %1.2f  %1.6f %1.6f %1.2f" %\
         (time_fe[0], 1/float(Nx_fe[0]), 1/float(Nt_fe[0]), errors_fe[0]*100)
 print "one jacobi iteration                          %1.2f  %1.6f %1.6f %1.4f" %\
@@ -43,5 +41,5 @@ print "three jacobi iteration                        %1.2f  %1.6f %1.6f %1.4f" %
      (time_fe[2], 1/float(Nx_fe[2]), 1/(float(Nt_fe[2])*10), errors_fe[2]*100)
 print "one jacobi iteration                          %1.2f  %1.6f %1.6f %1.4f" %\
          (time_fe[3], 1/float(Nx_fe[3]), 1/(float(Nt_fe[3])*10), errors_fe[3]*100)
-print "operator splitting                            %1.2f %1.6f %1.6f %1.4f" %\
+print "operator splitting                            %1.2f  %1.6f %1.6f %1.4f" %\
          (time_os, 1/float(Nx_os), 1/(float(10*Nt_os)*10), error_os*100)

@@ -54,8 +54,7 @@ class PDEsolver:
         z = Function(V)
         LHS = M - A*self.dt
 
-        # lumped mass matrix
-        # diagonal elements of M
+        #  M is  a lumped mass matrix
         M.get_diagonal(y.vector())
         diag =  y.vector().get_local()
         #create identity matrix
@@ -74,7 +73,6 @@ class PDEsolver:
         M_inv = I
         M_inv.zero()
         M_inv.set_diagonal(v.vector())
-        # henter ut diagonalen til lumped mass matrix
         M_inv.get_diagonal(z.vector())
         M_inv_diag_vector = z.vector()
         self.v_1_vector = v_0.vector()
@@ -183,51 +181,3 @@ class ForwardEulerSystem(PDEsolver):
                 dt*b*(v_1_vector - c_3*w_1_vector) + w_1_vector
 
 if __name__ == "__main__":
-
-    sigma = 0.1
-    #c_1 = 200
-    #a_1 = 0.1
-    #c_2 = 200
-    #c_3 = 1
-    #b = 1
-    i = 4
-    Nx = 100#800*2**i
-    Ny = Nx
-
-    degree = 1
-    two_d = 1
-    T = 0.1
-    num_steps = 400#12*4**i
-
-    system = True         # fitzhugh-nagumo if system = True
-    heat = False
-    plotting = False
-    advance_method = "OS"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
-    dt = T/float(num_steps)
-
-    start = time.time()
-
-    object_fe = ForwardEuler(T = T, num_steps = num_steps, plotting = plotting, \
-                            num_elements = Nx, system = system, heat = heat,
-                              advance_method = advance_method, two_d = two_d,
-                              sigma = sigma, degree = degree)
-
-    object_os = OperatorSplitting(T = T, num_steps = num_steps, plotting = plotting,
-                                    num_elements = Nx, system = system, heat = heat,
-                                     advance_method = advance_method, two_d = two_d,
-                                     sigma = sigma, degree = degree)
-    object_fe_system = ForwardEulerSystem(T = T, num_steps = num_steps, plotting = plotting,
-                                    num_elements = Nx, system = system, heat = heat,
-                                    advance_method = advance_method, two_d = two_d,
-                                    sigma = sigma, degree = degree)
-    if advance_method == "FE":
-        object_fe.solver()
-        print "hei"
-    elif advance_method == "OS":
-        object_os.solver()
-    elif advance_method == "FE_system":
-        object_fe_system.solver()
-
-    end = time.time()
-    print end - start
-    #interactive()

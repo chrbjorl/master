@@ -3,12 +3,14 @@ import numpy as np
 import time
 import matplotlib.pyplot as plt
 import os
+set_log_active(False)
 
 class PDEsolver:
     def __init__(self, T, num_steps, plotting_v, num_elements,
                 advance_method, two_d, num_jacobi_iter = [], jacobi_ = [],
                 write = False, degree = 1, M_i = 0.1, M_e = 0.1, c_1 = 200,
                  a_1 = 0.1, c_2 = 200, c_3 = 1, b = 1):
+
         self.T, self.num_steps = T, num_steps
         self.plotting_v = plotting_v
         self.dt = T/float(num_steps)
@@ -36,9 +38,8 @@ class PDEsolver:
             I_u_expression = Expression("x[0] < 0.2 ? 1: 0", degree = degree)
             mesh = UnitIntervalMesh(Nx)
 
-        #interpolate initial condition
-
-        if self.advance_method == "FE":# Define variational problem used for explicit scheme
+        # Define variational problem used for explicit scheme
+        if self.advance_method == "FE":
             V = FunctionSpace(mesh, "P", degree)
             v = TrialFunction(V)
             u_e = TrialFunction(V)
@@ -62,8 +63,7 @@ class PDEsolver:
             u = Function(V)
             zeros = Function(V)
 
-            # lumped mass matrix
-            # diagonal elements of M
+            # M is lumped mass matrix
             M.get_diagonal(y.vector())
             diag =  y.vector().get_local()
             #create identity matrix
@@ -83,7 +83,7 @@ class PDEsolver:
             M_inv.zero()
             M_inv.set_diagonal(v.vector())
 
-            #D_inv er en diagonalmatrise som brukes i  Jacobi-iterasjoner i det eksplisitte skjemaet
+            #D_inv is diagional
             A2.get_diagonal(y.vector())
             diag3 =  y.vector().get_local()
             diag3 = diag3**(-1)
@@ -93,7 +93,7 @@ class PDEsolver:
             D_inv.set_diagonal(v.vector())
             D_inv.get_diagonal(y.vector())
 
-            # R er en matrise som brukes i Jacobi-iterasjonene
+            # R is a matrix which is used in the Jacobi iterations
             R = A2.copy()
             zeros.vector()[:] = np.zeros(len(zeros.vector().get_local()))
             R.set_diagonal(zeros.vector())
@@ -137,7 +137,7 @@ class PDEsolver:
         for n in range(0, self.num_steps ):
             self.n = n
             if n == 0 and self.advance_method == "FE":
-                # loser for u_e i forste tidssteg med conjugate gradient metoden
+                # solve for u_e using the conjugate gradient metoden
                 solve(self.A2, u.vector(), -1*self.A1*self.v_1_vector, "cg")
                 self.u_1_vector = u.vector()
             v.vector()[:], w.vector()[:], u.vector()[:] = self.advance()
@@ -218,30 +218,3 @@ class OperatorSplitting(PDEsolver):
         return v_split.vector(), w_n_s1, u_split.vector()
 
 if __name__ == "__main__":
-    M_i  = 0.1
-    M_e  = 0.1
-    c_1 = 200
-    a_1 = 0.1
-    c_2 = 200
-    c_3 = 1
-    b = 1
-    num_jacobi_iter = 1
-
-    i = 0
-    Nx = 50*2**i
-    Ny = Nx
-
-    degree = 1
-    two_d = 1
-    T = 0.1
-    num_steps = 15*2**i
-
-    jacobi_ = True
-    plotting_v = False
-    plotting_u = False
-    advance_method = "FE"           #"FE" if ForwardEuler and "OS" if OperatorSplitting
-    dt = T/float(num_steps)
-    object_fe = ForwardEuler(T = T, num_steps = num_steps, plotting_u = plotting_u,
-                             plotting_v = plotting_v, num_elements = Nx,
-                              advance_method = advance_method)
-    object_fe.solver()
