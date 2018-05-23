@@ -1,4 +1,4 @@
-from conv_rates_monodomene import *
+from conv_rates import *
 
 two_d = 1
 mono = True
