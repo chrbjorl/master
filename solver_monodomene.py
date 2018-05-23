@@ -180,5 +180,3 @@ class ForwardEulerSystem(PDEsolver):
         return M_inv*product1 + v_1_vector + dt*c_1*v_1_vector*\
                 (v_1_vector - a_1)*(1 - v_1_vector) - dt*c_2*v_1_vector*w_1_vector, \
                 dt*b*(v_1_vector - c_3*w_1_vector) + w_1_vector
-
-if __name__ == "__main__":
