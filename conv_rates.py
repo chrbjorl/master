@@ -35,7 +35,7 @@ def table(num_steps, num_elements, advance_method, two_d, mono, plotting = False
                                     num_elements = num_elements[j], system = True, heat = False,
                                      advance_method = advance_method, two_d = two_d)
             else:
-                object_ = solver_mono.ForwardEuler(T = T, num_steps = num_steps[j], plotting_v = plotting,
+                object_ = solver_mono.ForwardEuler(T = T, num_steps = num_steps[j], plotting = plotting,
                                     num_elements = num_elements[j], system = True, heat = False,
                                      advance_method = advance_method, two_d = two_d)
         else:

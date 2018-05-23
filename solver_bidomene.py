@@ -6,8 +6,9 @@ import os
 
 class PDEsolver:
     def __init__(self, T, num_steps, plotting_v, num_elements,
-                advance_method, two_d, num_jacobi_iter = [], jacobi_ = [], degree = 1,
-                 M_i = 0.1, M_e = 0.1, c_1 = 200, a_1 = 0.1, c_2 = 200, c_3 = 1, b = 1):
+                advance_method, two_d, num_jacobi_iter = [], jacobi_ = [],
+                write = False, degree = 1, M_i = 0.1, M_e = 0.1, c_1 = 200,
+                 a_1 = 0.1, c_2 = 200, c_3 = 1, b = 1):
         self.T, self.num_steps = T, num_steps
         self.plotting_v = plotting_v
         self.dt = T/float(num_steps)
@@ -20,6 +21,7 @@ class PDEsolver:
         Nx = num_elements
         Ny = Nx
         self.start = time.time()
+        self.write = write
 
         # create Expressions
         if two_d:
@@ -154,9 +156,10 @@ class PDEsolver:
                 plt.show()
         self.end = time.time()
         print "CPU-time: %1.2f" % float(self.end - self.start)
-        output_file = XDMFFile(filename + ".xdmf")
-        output_file.write_checkpoint(v,'v')
-        File(filename + '_mesh_v.xml.gz') << v.function_space().mesh()
+        if self.write:
+            output_file = XDMFFile(filename + ".xdmf")
+            output_file.write_checkpoint(v,'v')
+            File(filename + '_mesh_v.xml.gz') << v.function_space().mesh()
         self.v = v
 
 class ForwardEuler(PDEsolver):
@@ -183,8 +186,8 @@ class ForwardEuler(PDEsolver):
                 #u_fe = jacobi(u_1_vector, num_jacobi_iter, v_fe)
         else:
             RHS = A1*v_fe
-            solve(A2, u.vector(), RHS, "cg")
-            u_fe = u.vector()
+            solve(A2, self.u.vector(), RHS, "cg")
+            u_fe = self.u.vector()
         return v_fe, w_fe, u_fe
 
 class OperatorSplitting(PDEsolver):

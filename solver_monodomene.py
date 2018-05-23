@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 
 class PDEsolver:
     def __init__(self, T, num_steps, plotting, num_elements,
-                system, heat, advance_method, two_d, sigma, degree,
-                c_1 = 200, a_1 = 0.1, c_2 = 200, c_3 = 1, b = 1):
+                system, heat, advance_method, two_d, write = False, sigma = 0.1,
+                degree = 1, c_1 = 200, a_1 = 0.1, c_2 = 200, c_3 = 1, b = 1):
         self.T, self.num_steps = T, num_steps
         self.plotting = plotting
         self.dt = T/float(num_steps)
@@ -18,6 +18,7 @@ class PDEsolver:
         self.two_d = two_d
         self.c_1, self.a_1, self.c_2, self.c_3, self.b = c_1, a_1, c_2, c_3, b
         self.start = time.time()
+        self.write = write
         Nx = num_elements
         Ny = Nx
 
@@ -26,12 +27,10 @@ class PDEsolver:
             I_v_expression = Expression("pow(x[0], 2) + pow(x[1], 2) < 0.2 ? 1: 0", degree = degree)
             I_w_expression = Expression("x[0] < 0.2 && x[1] < 0.2 ? 0: 0", degree = degree)
             mesh = UnitSquareMesh(Nx, Ny)
-
         else:
-            I_v_expression = Expression("x[0] < 0.2 ? 1: 0", degree)
-            I_w_expression = Expression("x[0] < 0.2 ? 0: 0", degree)
+            I_v_expression = Expression("x[0] < 0.2 ? 1: 0", degree = degree)
+            I_w_expression = Expression("x[0] < 0.2 ? 0: 0", degree = degree)
             mesh = UnitIntervalMesh(Nx)
-
         #create function space
         V = FunctionSpace(mesh, "P", degree)
 
@@ -100,8 +99,8 @@ class PDEsolver:
                 v.vector()[:] = self.advance()
             self.v_1_vector = v.vector()
             self.tid += self.dt
-            if n%100 == 0:
-                  print self.tid
+            if n%int(self.num_steps/5) == 0:
+                  print "t = %1.2f" % self.tid
             # break if numerical solution diverges
             if abs(np.sum(self.v_1_vector.get_local())/len(self.v_1_vector.get_local())) > 2:
                 print "break"
@@ -110,16 +109,19 @@ class PDEsolver:
                 plot(v)
                 plt.show()
         self.end = time.time()
-        print self.end - self.start
-        plot(v)
-        plt.show()
+        print "CPU-time: %1.2f" % float(self.end - self.start)
+        if self.plotting:
+            plot(v)
+            plt.show()
         #write numerical solution to file
-        vtk_filename = "monodomain_%s_%s.pvd" % (self.two_d, self.advance_method)
-        vtk_file = File(vtk_filename)
-        vtk_file << v
-        output_file = XDMFFile(filename + ".xdmf")
-        output_file.write_checkpoint(v,'v')
-        File(filename + '_mesh.xml.gz') << v.function_space().mesh()
+        if self.write:
+            vtk_filename = "monodomain_%s_%s.pvd" % (self.two_d, self.advance_method)
+            vtk_file = File(vtk_filename)
+            vtk_file << v
+            output_file = XDMFFile(filename + ".xdmf")
+            output_file.write_checkpoint(v,'v')
+            File(filename + '_mesh.xml.gz') << v.function_space().mesh()
+        self.v = v
 
 class OperatorSplitting(PDEsolver):
     """ Bruker Godunov-splitting og baklengs Euler
